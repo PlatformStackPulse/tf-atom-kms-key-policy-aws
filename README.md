@@ -1,4 +1,6 @@
-# Terraform Module Template
+# tf-atom-kms-key-policy-aws
+
+> Terraform atom that composes a consistent, tf-label-named identity for an AWS KMS key policy, so KMS access policies are provisioned with standardized naming, tagging, and enable/disable control across environments.
 
 <!-- Badges: Update REPO_OWNER/REPO_NAME after creating from template -->
 [![CI](https://github.com/PlatformStackPulse/terraform-atom-molecule-module-template/actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
@@ -9,22 +11,19 @@
 ![Terraform](https://img.shields.io/badge/terraform-%3E%3D1.6.0-blue?logo=terraform)
 ![License](https://img.shields.io/github/license/PlatformStackPulse/terraform-atom-molecule-module-template)
 
-A production-ready template for creating Terraform modules following the **one module per repository** best practice, with built-in CI/CD, security scanning, testing, documentation generation, and publishing to public registries.
+A single-purpose Terraform **atom** in the PlatformStackPulse fleet. It wraps the [tf-label](https://github.com/PlatformStackPulse/tf-label) context module to give an AWS KMS key policy a consistent, environment-aware identity (`namespace-stage-name`), standardized tags, and a single `enabled` switch — the building block a KMS molecule/cell composes to attach access policies to KMS keys.
 
 ## Features
 
-- **One Module Per Repo** — Module lives at the root; no nested `modules/` directory
-- **Registry Publishing** — Auto-publish to Terraform Registry, Artifactory, or GitLab on release
-- **Native Terraform Testing** — `terraform test` with mock providers (no external tools)
-- **Security Scanning** — Trivy IaC scanning for HIGH/CRITICAL vulnerabilities
-- **Linting** — TFLint with AWS ruleset (preset "all")
-- **Auto Documentation** — terraform-docs generates README sections on every commit
-- **GitHub Actions CI/CD** — Workflows for the full module lifecycle
-- **Auto Release** — CI passes on main → auto-tag → GitHub Release created
-- **Pre-Commit Hooks** — Format, validate, lint, docs, and security on every commit
-- **Conventional Commits** — Enforced commit message format
-- **Semantic Versioning** — Automated version management and releases
-- **DevContainer** — VS Code remote development ready
+- **tf-label identity** — Consistent `namespace-stage-name` id and standard tags via the shared `tf-label` context module (`context.tf`)
+- **Enable/disable switch** — Single `enabled` input to conditionally provision (or suppress) the KMS policy across environments
+- **Atom design** — One module per repo, root-level; composes cleanly into KMS molecules/cells
+- **Native Terraform testing** — Real `terraform test` unit tests with a mock AWS provider (no external tools, no AWS calls)
+- **Security scanning** — Trivy IaC scanning for HIGH/CRITICAL findings
+- **Linting** — TFLint with the AWS ruleset (preset "all")
+- **Auto documentation** — terraform-docs regenerates the docs block on every commit
+- **GitHub Actions CI/CD** — Format, validate, lint, test, security, and docs gates; auto-tag + Release on green `main`
+- **Pre-commit hooks & conventional commits** — Enforced formatting, validation, and commit message format
 
 ## CI Pipeline
 
@@ -77,40 +76,26 @@ See [TEMPLATE_GUIDE.md](TEMPLATE_GUIDE.md) for detailed instructions.
 
 ## Usage
 
-### From GitHub
-
 ```hcl
-module "this" {
-  source = "github.com/PlatformStackPulse/terraform-aws-my-module?ref=v1.0.0"
+module "kms_key_policy" {
+  source = "git::https://github.com/PlatformStackPulse/tf-atom-kms-key-policy-aws.git?ref=v1.0.0"
 
-  name        = "my-resource"
-  environment = "dev"
-  namespace   = "myorg"
+  # tf-label identity (drives the module id and default tags)
+  namespace = "eg"
+  stage     = "prod"
+  name      = "app-secrets"
+
+  # Toggle provisioning without removing the block from the composition
+  enabled = true
 
   tags = {
-    Project = "example"
+    Project = "platform"
     Owner   = "platform-engineering"
   }
 }
 ```
 
-### From Terraform Registry
-
-```hcl
-module "this" {
-  source  = "PlatformStackPulse/my-module/aws"
-  version = "~> 1.0"
-
-  name        = "my-resource"
-  environment = "dev"
-  namespace   = "myorg"
-
-  tags = {
-    Project = "example"
-    Owner   = "platform-engineering"
-  }
-}
-```
+The module exposes `output.id` (e.g. `eg-prod-app-secrets`) and `output.enabled` for downstream compositions to reference.
 
 ## Module Structure
 
@@ -312,6 +297,26 @@ No resources.
 |------|-------------|
 | <a name="output_enabled"></a> [enabled](#output\_enabled) | Whether the module is enabled. |
 <!-- END_TF_DOCS -->
+
+## Tests
+
+Unit tests use a **mock AWS provider** (`mock_provider "aws" {}`) — no AWS credentials and no real API calls. They assert only on plan-known values (the composed tf-label `id` and the `enabled` pass-through), never on computed KMS ARNs/IDs (which are unknown under a mock provider).
+
+```bash
+# Unit tests (mock provider, offline)
+make test-unit
+# or directly:
+terraform init -backend=false
+terraform test -test-directory=tests/unit
+
+# Integration tests (require real AWS credentials)
+make test-integration
+```
+
+| Test file | Run block | Asserts |
+|-----------|-----------|---------|
+| `tests/unit/main_test.tftest.hcl` | `creates_when_enabled` | `output.enabled == true`; `output.id == "eg-test-thing"` |
+| `tests/unit/main_test.tftest.hcl` | `disabled_creates_nothing` | `enabled = false` ⇒ `output.enabled == false` |
 
 ## Learning Materials
 
