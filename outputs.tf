@@ -4,6 +4,11 @@ output "enabled" {
 }
 
 output "id" {
-  description = "Disambiguated ID (tf-label generated identifier), e.g. \"namespace-stage-name\"."
-  value       = module.this.id
+  description = "The id of the KMS key policy."
+  value       = try(aws_kms_key_policy.this[0].id, null)
+}
+
+output "key_id" {
+  description = "Id of the KMS key the policy is attached to."
+  value       = try(aws_kms_key_policy.this[0].key_id, null)
 }
